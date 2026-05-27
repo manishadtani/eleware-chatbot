@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
 import { google } from "googleapis";
-import credentials from "@/app/credentials.json";
 
 // ===== OPENAI (commented — switch back anytime) =====
 // const client = new OpenAI({
@@ -18,7 +17,10 @@ const client = new OpenAI({
 });
 
 const auth = new google.auth.GoogleAuth({
-  credentials,
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+  },
   scopes: [
     "https://www.googleapis.com/auth/spreadsheets",
   ],
@@ -30,7 +32,7 @@ const sheets = google.sheets({
 });
 
 const SPREADSHEET_ID =
-  "1LAkg0DIC-6JYFZPFIbJPKWWGmzX558A4v2vhEQ6p1AI";
+  process.env.GOOGLE_SHEET_ID || "";
 
 const SYSTEM_PROMPT = `
 You are the Eleware Accounting AI assistant — a helpful, professional, and approachable financial consultant.

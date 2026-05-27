@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 
-import credentials from "@/app/credentials.json";
-
 const auth = new google.auth.GoogleAuth({
-  credentials,
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+  },
   scopes: [
     "https://www.googleapis.com/auth/spreadsheets",
   ],
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
     const { name, email, phone } = body;
 
     await sheets.spreadsheets.values.append({
-      spreadsheetId: "1LAkg0DIC-6JYFZPFIbJPKWWGmzX558A4v2vhEQ6p1AI",
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
 
       range: "Sheet1!A:D",
 
