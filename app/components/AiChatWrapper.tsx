@@ -24,27 +24,20 @@ export default function AiChatWrapper() {
     phone: "",
   });
 
+  const [sessionId, setSessionId] = useState("");
 
-const [sessionId, setSessionId] = useState("");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-useEffect(() => {
-  if (typeof window === "undefined") return;
+    let existing = localStorage.getItem("eleware_chat_session");
 
-  let existing = localStorage.getItem(
-    "eleware_chat_session"
-  );
+    if (!existing) {
+      existing = crypto.randomUUID();
+      localStorage.setItem("eleware_chat_session", existing);
+    }
 
-  if (!existing) {
-    existing = crypto.randomUUID();
-
-    localStorage.setItem(
-      "eleware_chat_session",
-      existing
-    );
-  }
-
-  setSessionId(existing);
-}, []);
+    setSessionId(existing);
+  }, []);
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -53,7 +46,6 @@ useEffect(() => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto scroll
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -65,18 +57,15 @@ useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
 
-  // Focus input safely on mobile
   useEffect(() => {
     if (open && started) {
       const timeout = setTimeout(() => {
         inputRef.current?.focus();
       }, 350);
-
       return () => clearTimeout(timeout);
     }
   }, [open, started]);
 
-  // Prevent body scrolling when chat open
   useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
@@ -85,7 +74,6 @@ useEffect(() => {
       document.body.style.overflow = "";
       document.body.style.touchAction = "";
     }
-
     return () => {
       document.body.style.overflow = "";
       document.body.style.touchAction = "";
@@ -93,17 +81,15 @@ useEffect(() => {
   }, [open]);
 
   // Load saved user
-useEffect(() => {
-  if (typeof window === "undefined") return;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-  const savedUser = localStorage.getItem("eleware_user");
+    const savedUser = localStorage.getItem("eleware_user");
 
     if (savedUser) {
       const parsed = JSON.parse(savedUser);
-
       setDetails(parsed);
       setStarted(true);
-
       setMessages([
         {
           role: "ai",
@@ -113,120 +99,83 @@ useEffect(() => {
     }
   }, []);
 
-const handleStart = async () => {
-  if (
-    !details.name.trim() ||
-    !details.email.trim() ||
-    !details.phone.trim()
-  ) {
-    alert("Please fill in all fields");
-    return;
-  }
-
-  try {
-    // SAVE TO GOOGLE SHEETS
-    await fetch("/api/save-lead", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(details),
-    });
-
-    // SAVE LOCALLY
-    localStorage.setItem(
-      "eleware_user",
-      JSON.stringify(details)
-    );
-
-    setStarted(true);
-
-    setMessages([
-      {
-        role: "ai",
-        text: `Hi ${details.name}! I'm the Eleware Accounting assistant. Ask me anything about GST, tax filing, bookkeeping, company registration, or any financial query.`,
-      },
-    ]);
-  } catch (error) {
-    console.error(error);
-
-    alert("Failed to save lead");
-  }
-};
-
-const handleSubmit = async () => {
-  if (!message.trim() || loading || !sessionId) return;
-
-  const userMessage = message.trim();
-
-  // CREATE UPDATED HISTORY FIRST
-  const updatedMessages: ChatMessage[] = [
-    ...messages,
-    {
-      role: "user",
-      text: userMessage,
-    },
-  ];
-
-  // UPDATE UI IMMEDIATELY
-  setMessages(updatedMessages);
-
-  setMessage("");
-  setLoading(true);
-
-  try {
-    // CONVERT TO OPENAI FORMAT
-    const formattedMessages = updatedMessages.map((msg) => ({
-      role: msg.role === "ai" ? "assistant" : "user",
-      content: msg.text,
-    }));
-
-    console.log("FULL CHAT HISTORY:", formattedMessages);
-
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-
-      body: JSON.stringify({
-  user: details,
-
-  sessionId,
-
-  messages: formattedMessages,
-
-  meetingBooked: false,
-}),
-    });
-
-    if (!response.ok) {
-      throw new Error("API failed");
+  const handleStart = async () => {
+    if (!details.name.trim() || !details.email.trim() || !details.phone.trim()) {
+      alert("Please fill in all fields");
+      return;
     }
 
-    const data = await response.json();
+    try {
+      await fetch("/api/save-lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(details),
+      });
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "ai",
-        text: data.reply,
-      },
-    ]);
-  } catch (error) {
-    console.error(error);
+      localStorage.setItem("eleware_user", JSON.stringify(details));
+      setStarted(true);
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        role: "ai",
-        text: "Something went wrong. Please try again.",
-      },
-    ]);
-  }
+      setMessages([
+        {
+          role: "ai",
+          text: `Hi ${details.name}! I'm the Eleware Accounting assistant. Ask me anything about GST, tax filing, bookkeeping, company registration, or any financial query.`,
+        },
+      ]);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to save lead");
+    }
+  };
 
-  setLoading(false);
-};
+  const handleSubmit = async () => {
+    if (!message.trim() || loading || !sessionId) return;
+
+    const userMessage = message.trim();
+
+    const updatedMessages: ChatMessage[] = [
+      ...messages,
+      { role: "user", text: userMessage },
+    ];
+
+    setMessages(updatedMessages);
+    setMessage("");
+    setLoading(true);
+
+    try {
+      const formattedMessages = updatedMessages.map((msg) => ({
+        role: msg.role === "ai" ? "assistant" : "user",
+        content: msg.text,
+      }));
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user: details,
+          sessionId,
+          messages: formattedMessages,
+          meetingBooked: false,
+        }),
+      });
+
+      if (!response.ok) throw new Error("API failed");
+
+      const data = await response.json();
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", text: data.reply },
+      ]);
+    } catch (error) {
+      console.error(error);
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", text: "Something went wrong. Please try again." },
+      ]);
+    }
+
+    setLoading(false);
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -237,414 +186,461 @@ const handleSubmit = async () => {
 
   return (
     <>
-      {/* Floating Button */}
+      {/* ===== FLOATING BUTTON ===== */}
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="
-          fixed
-          bottom-5
-          right-5
-          md:bottom-6
-          md:right-6
-
-          bg-blue-600
-          hover:bg-blue-700
-
-          text-white
-          font-medium
-          text-sm
-          md:text-base
-
-          px-5
-          py-3
-          md:px-6
-          md:py-3.5
-
-          rounded-full
-
-          shadow-lg
-          hover:shadow-xl
-
-          z-50
-
-          transition-all
-          duration-300
-          ease-out
-
-          hover:scale-105
-          active:scale-95
-
-          flex
-          items-center
-          gap-2
-        "
+        style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          zIndex: 9998,
+          background: "linear-gradient(135deg, #059669 0%, #0d9488 100%)",
+          color: "#fff",
+          border: "none",
+          borderRadius: "60px",
+          padding: "14px 24px",
+          fontSize: "14px",
+          fontWeight: 600,
+          fontFamily: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          boxShadow: "0 8px 32px rgba(5, 150, 105, 0.4), 0 2px 8px rgba(0,0,0,0.1)",
+          transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+          transform: open ? "scale(0)" : "scale(1)",
+          opacity: open ? 0 : 1,
+          letterSpacing: "0.3px",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "scale(1.05)";
+          e.currentTarget.style.boxShadow = "0 12px 40px rgba(5, 150, 105, 0.5), 0 4px 12px rgba(0,0,0,0.15)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = open ? "scale(0)" : "scale(1)";
+          e.currentTarget.style.boxShadow = "0 8px 32px rgba(5, 150, 105, 0.4), 0 2px 8px rgba(0,0,0,0.1)";
+        }}
       >
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-          />
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
+        <span>Need help? Chat with us</span>
 
-        <span>Ask an Expert</span>
+        {/* Pulse ring */}
+        <span
+          style={{
+            position: "absolute",
+            top: "-3px",
+            right: "-3px",
+            width: "14px",
+            height: "14px",
+            background: "#fbbf24",
+            borderRadius: "50%",
+            border: "2px solid #fff",
+            animation: "elw-pulse 2s infinite",
+          }}
+        />
       </button>
 
-      {/* Chat */}
+      {/* ===== CHAT PANEL ===== */}
       {open && (
         <>
           {/* Backdrop */}
           <div
-            className="
-              fixed
-              inset-0
-              bg-black/40
-              z-40
-            "
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.35)",
+              backdropFilter: "blur(4px)",
+              zIndex: 9998,
+              animation: "elw-fadeIn 0.2s ease",
+            }}
             onClick={() => setOpen(false)}
           />
 
-          {/* Chat Panel */}
+          {/* Panel */}
           <div
-  className="
-    fixed
-    inset-x-3
-    bottom-3
-
-    sm:inset-x-auto
-    sm:right-4
-
-    md:right-6
-    md:bottom-6
-
-    w-auto
-
-    min-h-[320px]
-    h-auto
-
-    max-h-[calc(100dvh-90px)]
-
-    sm:w-[380px]
-    sm:min-h-[360px]
-    sm:max-h-[80dvh]
-
-    md:w-[420px]
-    md:min-h-[380px]
-    md:max-h-[700px]
-
-    bg-white
-    shadow-2xl
-    z-50
-
-    flex
-    flex-col
-
-    rounded-2xl
-    overflow-hidden
-
-    border
-    border-gray-200
-
-    animate-slide-up
-  "
->
-            {/* Header */}
+            style={{
+              position: "fixed",
+              bottom: "24px",
+              right: "24px",
+              width: "min(420px, calc(100vw - 32px))",
+              maxHeight: "min(680px, calc(100dvh - 48px))",
+              zIndex: 9999,
+              display: "flex",
+              flexDirection: "column",
+              borderRadius: "20px",
+              overflow: "hidden",
+              boxShadow: "0 25px 80px rgba(0,0,0,0.2), 0 10px 30px rgba(0,0,0,0.1)",
+              border: "1px solid rgba(0,0,0,0.08)",
+              animation: "elw-slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+              fontFamily: "'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif",
+            }}
+          >
+            {/* ===== HEADER ===== */}
             <div
-              className="
-                bg-white
-                border-b
-                border-gray-100
-
-                px-5
-                py-4
-
-                flex
-                items-center
-                justify-between
-
-                shadow-sm
-                flex-shrink-0
-              "
+              style={{
+                background: "linear-gradient(135deg, #065f46 0%, #047857 50%, #059669 100%)",
+                padding: "18px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexShrink: 0,
+              }}
             >
-              <div className="flex items-center gap-3">
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <div
-                  className="
-                    w-10
-                    h-10
-                    bg-blue-50
-                    rounded-full
-                    flex
-                    items-center
-                    justify-center
-                  "
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "12px",
+                    background: "rgba(255,255,255,0.15)",
+                    backdropFilter: "blur(8px)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                  }}
                 >
-                  <svg
-                    className="w-6 h-6 text-emerald-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                    />
+                  <svg width="22" height="22" fill="none" stroke="#fff" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
                 </div>
-
                 <div>
-                  <h2 className="font-semibold text-black">
+                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#fff", margin: 0, letterSpacing: "-0.2px" }}>
                     Eleware Accounting
                   </h2>
-
-                  <p className="text-xs text-black">
-                    Online • Financial clarity, always
-                  </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "5px", marginTop: "2px" }}>
+                    <span
+                      style={{
+                        width: "7px",
+                        height: "7px",
+                        borderRadius: "50%",
+                        background: "#4ade80",
+                        display: "inline-block",
+                        animation: "elw-pulse 2s infinite",
+                      }}
+                    />
+                    <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.8)", fontWeight: 400 }}>
+                      Online now • Typically replies instantly
+                    </span>
+                  </div>
                 </div>
               </div>
 
               <button
                 onClick={() => setOpen(false)}
-                className="
-                  w-8
-                  h-8
-                  rounded-full
-
-                  text-black
-                  hover:text-black
-                  hover:bg-gray-50
-
-                  flex
-                  items-center
-                  justify-center
-
-                  transition-all
-                  duration-200
-                "
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "8px",
+                  background: "rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.2)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.1)";
+                }}
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
-            {/* Form */}
+            {/* ===== FORM ===== */}
             {!started ? (
-              <div
-                className="
-                  flex-1
-                  min-h-0
-                  overflow-y-auto
-                  p-6
-                  bg-gray-50
-                "
-              >
+              <div style={{ flex: 1, overflow: "auto", background: "#f8faf9", padding: "24px 20px" }}>
+                {/* Welcome card */}
                 <div
-                  className="
-                    bg-white
-                    rounded-xl
-                    p-6
-                    shadow-sm
-                    border
-                    border-gray-100
-                  "
+                  style={{
+                    background: "#fff",
+                    borderRadius: "16px",
+                    padding: "28px 24px",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)",
+                    border: "1px solid #f0f0f0",
+                  }}
                 >
-                  <div className="text-center mb-6">
-                    <h3 className="text-lg font-semibold text-black">
+                  {/* Icon */}
+                  <div style={{ textAlign: "center", marginBottom: "20px" }}>
+                    <div
+                      style={{
+                        width: "56px",
+                        height: "56px",
+                        borderRadius: "16px",
+                        background: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginBottom: "14px",
+                      }}
+                    >
+                      <svg width="26" height="26" fill="none" stroke="#059669" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                      </svg>
+                    </div>
+                    <h3
+                      style={{
+                        fontSize: "17px",
+                        fontWeight: 700,
+                        color: "#111827",
+                        margin: "0 0 6px",
+                        letterSpacing: "-0.3px",
+                      }}
+                    >
                       Talk to our AI assistant
                     </h3>
-
-                    <p className="text-sm text-black mt-1">
+                    <p
+                      style={{
+                        fontSize: "13px",
+                        color: "#6b7280",
+                        margin: 0,
+                        lineHeight: 1.5,
+                      }}
+                    >
                       Quick intro and we&apos;ll get you the answers you need
                     </p>
                   </div>
 
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="Full name"
-                      value={details.name}
-                      onChange={(e) =>
-                        setDetails({
-                          ...details,
-                          name: e.target.value,
-                        })
-                      }
-                      className="
-                        w-full
-                        border
-                        border-gray-200
-                        rounded-xl
-                        px-4
-                        py-3
-                        text-sm
-                        text-black
-                        placeholder-black
-                        outline-none
-                        focus:border-blue-400
-                        focus:ring-2
-                        focus:ring-blue-100
-                      "
-                    />
-
-                    <input
-                      type="email"
-                      placeholder="Email address"
-                      value={details.email}
-                      onChange={(e) =>
-                        setDetails({
-                          ...details,
-                          email: e.target.value,
-                        })
-                      }
-                      className="
-                        w-full
-                        border
-                        border-gray-200
-                        rounded-xl
-                        px-4
-                        py-3
-                        text-sm
-                        text-black
-                        placeholder-black
-                        outline-none
-                        focus:border-blue-400
-                        focus:ring-2
-                        focus:ring-blue-100
-                      "
-                    />
-
-                    <input
-                      type="tel"
-                      placeholder="Phone number"
-                      value={details.phone}
-                      onChange={(e) =>
-                        setDetails({
-                          ...details,
-                          phone: e.target.value,
-                        })
-                      }
-                      className="
-                        w-full
-                        border
-                        border-gray-200
-                        rounded-xl
-                        px-4
-                        py-3
-                        text-sm
-                        text-black
-                        placeholder-black
-                        outline-none
-                        focus:border-blue-400
-                        focus:ring-2
-                        focus:ring-blue-100
-                      "
-                    />
+                  {/* Inputs */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {[
+                      { type: "text", placeholder: "Full name", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z", key: "name" as const },
+                      { type: "email", placeholder: "Email address", icon: "M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z", key: "email" as const },
+                      { type: "tel", placeholder: "Phone number", icon: "M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z", key: "phone" as const },
+                    ].map((field) => (
+                      <div key={field.key} style={{ position: "relative" }}>
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: "14px",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            color: "#9ca3af",
+                            display: "flex",
+                          }}
+                        >
+                          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={field.icon} />
+                          </svg>
+                        </div>
+                        <input
+                          type={field.type}
+                          placeholder={field.placeholder}
+                          value={details[field.key]}
+                          onChange={(e) =>
+                            setDetails({ ...details, [field.key]: e.target.value })
+                          }
+                          style={{
+                            width: "100%",
+                            border: "1.5px solid #e5e7eb",
+                            borderRadius: "12px",
+                            padding: "13px 16px 13px 40px",
+                            fontSize: "13.5px",
+                            fontFamily: "inherit",
+                            color: "#111827",
+                            background: "#fafafa",
+                            outline: "none",
+                            transition: "all 0.2s",
+                            boxSizing: "border-box",
+                          }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.borderColor = "#059669";
+                            e.currentTarget.style.boxShadow = "0 0 0 3px rgba(5,150,105,0.1)";
+                            e.currentTarget.style.background = "#fff";
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.borderColor = "#e5e7eb";
+                            e.currentTarget.style.boxShadow = "none";
+                            e.currentTarget.style.background = "#fafafa";
+                          }}
+                        />
+                      </div>
+                    ))}
                   </div>
 
+                  {/* Submit */}
                   <button
                     onClick={handleStart}
-                    className="
-                      mt-6
-                      w-full
-                      bg-blue-600
-                      hover:bg-blue-700
-                      text-white
-                      font-medium
-                      py-3
-                      rounded-xl
-                    "
+                    style={{
+                      width: "100%",
+                      marginTop: "18px",
+                      padding: "14px",
+                      borderRadius: "12px",
+                      border: "none",
+                      background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                      color: "#fff",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                      transition: "all 0.25s",
+                      boxShadow: "0 4px 14px rgba(5,150,105,0.3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px",
+                      letterSpacing: "0.2px",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = "0 6px 20px rgba(5,150,105,0.4)";
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = "0 4px 14px rgba(5,150,105,0.3)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
                   >
-                    Get Started
+                    Start Conversation
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
                   </button>
+
+                  {/* Trust */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      marginTop: "16px",
+                    }}
+                  >
+                    <svg width="13" height="13" fill="none" stroke="#9ca3af" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span style={{ fontSize: "11px", color: "#9ca3af" }}>
+                      Your information is secure & private
+                    </span>
+                  </div>
                 </div>
               </div>
             ) : (
               <>
-                {/* Messages */}
+                {/* ===== MESSAGES ===== */}
                 <div
-                  className="
-                    flex-1
-                    min-h-0
-                    overflow-y-auto
-                    overflow-x-hidden
-                    p-4
-                    bg-gray-50
-                    space-y-3
-                  "
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: "auto",
+                    overflowX: "hidden",
+                    padding: "16px",
+                    background: "#f8faf9",
+                  }}
                 >
                   {messages.map((msg, index) => (
                     <div
                       key={index}
-                      className={`flex ${
-                        msg.role === "user"
-                          ? "justify-end"
-                          : "justify-start"
-                      }`}
+                      style={{
+                        display: "flex",
+                        justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+                        marginBottom: "12px",
+                        alignItems: "flex-end",
+                        gap: "8px",
+                        animation: "elw-msgIn 0.3s ease",
+                      }}
                     >
-                      <div
-                        className={`
-                          max-w-[85%]
-                          px-4
-                          py-2.5
-                          rounded-2xl
-                          text-sm
-                          break-words
+                      {/* AI avatar */}
+                      {msg.role === "ai" && (
+                        <div
+                          style={{
+                            width: "28px",
+                            height: "28px",
+                            borderRadius: "8px",
+                            background: "linear-gradient(135deg, #059669, #0d9488)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <svg width="14" height="14" fill="none" stroke="#fff" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
 
-                          ${
-                            msg.role === "user"
-                              ? "bg-blue-600 text-white rounded-br-sm"
-                              : "bg-white border border-gray-100 text-black shadow-sm rounded-bl-sm"
-                          }
-                        `}
+                      <div
+                        style={{
+                          maxWidth: "78%",
+                          padding: "12px 16px",
+                          fontSize: "13.5px",
+                          lineHeight: "1.55",
+                          wordBreak: "break-word",
+                          ...(msg.role === "user"
+                            ? {
+                                background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                                color: "#fff",
+                                borderRadius: "16px 16px 4px 16px",
+                                boxShadow: "0 2px 8px rgba(5,150,105,0.2)",
+                              }
+                            : {
+                                background: "#fff",
+                                color: "#1f2937",
+                                borderRadius: "16px 16px 16px 4px",
+                                border: "1px solid #e5e7eb",
+                                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                              }),
+                        }}
                       >
                         {msg.text}
                       </div>
                     </div>
                   ))}
 
+                  {/* Typing indicator */}
                   {loading && (
-                    <div className="flex justify-start">
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: "8px", marginBottom: "12px" }}>
                       <div
-                        className="
-                          bg-white
-                          border
-                          border-gray-100
-                          shadow-sm
-                          px-4
-                          py-2.5
-                          rounded-2xl
-                          rounded-bl-sm
-                        "
+                        style={{
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "8px",
+                          background: "linear-gradient(135deg, #059669, #0d9488)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
                       >
-                        <div className="flex gap-1">
-                          <div className="w-2 h-2 bg-black rounded-full animate-bounce" />
-                          <div
-                            className="w-2 h-2 bg-black rounded-full animate-bounce"
-                            style={{ animationDelay: "150ms" }}
+                        <svg width="14" height="14" fill="none" stroke="#fff" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div
+                        style={{
+                          background: "#fff",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: "16px 16px 16px 4px",
+                          padding: "14px 18px",
+                          display: "flex",
+                          gap: "5px",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                        }}
+                      >
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              borderRadius: "50%",
+                              background: "#059669",
+                              opacity: 0.5,
+                              animation: `elw-bounce 1.4s infinite ease-in-out both`,
+                              animationDelay: `${i * 0.16}s`,
+                            }}
                           />
-                          <div
-                            className="w-2 h-2 bg-black rounded-full animate-bounce"
-                            style={{ animationDelay: "300ms" }}
-                          />
-                        </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -652,19 +648,25 @@ const handleSubmit = async () => {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input */}
+                {/* ===== INPUT ===== */}
                 <div
-                  className="
-                    p-3
-                    bg-white
-                    border-t
-                    border-gray-100
-                    flex-shrink-0
-                    pb-[max(12px,env(safe-area-inset-bottom))]
-                  "
+                  style={{
+                    padding: "14px 16px",
+                    paddingBottom: "max(14px, env(safe-area-inset-bottom))",
+                    background: "#fff",
+                    borderTop: "1px solid #f0f0f0",
+                    flexShrink: 0,
+                  }}
                 >
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1 relative">
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "center",
+                      }}
+                    >
                       <input
                         ref={inputRef}
                         type="text"
@@ -672,63 +674,70 @@ const handleSubmit = async () => {
                         onChange={(e) => setMessage(e.target.value)}
                         onKeyDown={handleKeyPress}
                         placeholder="Type your message..."
-                        className="
-                          w-full
-                          border
-                          border-gray-200
-                          rounded-xl
-                          px-4
-                          py-3
-                          pr-12
-                          text-sm
-                          text-black
-                          placeholder-black
-                          outline-none
-                          focus:border-blue-400
-                          focus:ring-2
-                          focus:ring-blue-100
-                        "
+                        style={{
+                          width: "100%",
+                          border: "1.5px solid #e5e7eb",
+                          borderRadius: "14px",
+                          padding: "13px 16px",
+                          fontSize: "13.5px",
+                          fontFamily: "inherit",
+                          color: "#111827",
+                          background: "#fafafa",
+                          outline: "none",
+                          transition: "all 0.2s",
+                          boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = "#059669";
+                          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(5,150,105,0.08)";
+                          e.currentTarget.style.background = "#fff";
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = "#e5e7eb";
+                          e.currentTarget.style.boxShadow = "none";
+                          e.currentTarget.style.background = "#fafafa";
+                        }}
                       />
                     </div>
 
                     <button
                       onClick={handleSubmit}
                       disabled={!message.trim()}
-                      className="
-                        bg-blue-600
-                        hover:bg-blue-700
-                        disabled:opacity-40
-                        disabled:cursor-not-allowed
-
-                        text-white
-
-                        w-11
-                        h-11
-
-                        rounded-xl
-
-                        flex
-                        items-center
-                        justify-center
-
-                        transition-all
-                        duration-200
-                      "
+                      style={{
+                        width: "46px",
+                        height: "46px",
+                        borderRadius: "14px",
+                        border: "none",
+                        background: message.trim()
+                          ? "linear-gradient(135deg, #059669 0%, #047857 100%)"
+                          : "#e5e7eb",
+                        color: message.trim() ? "#fff" : "#9ca3af",
+                        cursor: message.trim() ? "pointer" : "not-allowed",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "all 0.25s",
+                        flexShrink: 0,
+                        boxShadow: message.trim() ? "0 4px 12px rgba(5,150,105,0.25)" : "none",
+                      }}
                     >
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                        />
+                      <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
                     </button>
+                  </div>
+
+                  {/* Powered by */}
+                  <div
+                    style={{
+                      textAlign: "center",
+                      marginTop: "10px",
+                      fontSize: "10px",
+                      color: "#c0c0c0",
+                      letterSpacing: "0.3px",
+                    }}
+                  >
+                    Powered by Eleware AI
                   </div>
                 </div>
               </>
@@ -736,6 +745,56 @@ const handleSubmit = async () => {
           </div>
         </>
       )}
+
+      {/* ===== ANIMATIONS ===== */}
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        @keyframes elw-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.85); }
+        }
+
+        @keyframes elw-fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes elw-slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes elw-msgIn {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes elw-bounce {
+          0%, 80%, 100% { transform: scale(0); }
+          40% { transform: scale(1); }
+        }
+
+        #elw-chat-panel::-webkit-scrollbar {
+          width: 4px;
+        }
+        #elw-chat-panel::-webkit-scrollbar-thumb {
+          background: #d1d5db;
+          border-radius: 4px;
+        }
+      `}</style>
     </>
   );
 }
