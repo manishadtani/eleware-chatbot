@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# secrets
+.env.local
+.env
+app/credentials.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*
