@@ -727,6 +727,7 @@ export default function AiChatWrapper() {
                     </button>
                   </div>
 
+
                   {/* Powered by */}
                   <div
                     style={{
